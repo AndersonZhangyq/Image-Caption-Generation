@@ -176,5 +176,7 @@ else:
     # Feel free to add helper functions to utils.py as needed,
     # documenting what they do in the code and in your report
 
+    calculate_bleu(image_id_candidate_reference)
 
-
+    # TODO
+    calculate_cosine_similarity(image_id_candidate_reference)
