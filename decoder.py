@@ -21,8 +21,10 @@ from models import DecoderRNN, EncoderCNN
 from utils import *
 from config import *
 
+from tqdm import tqdm
+
 # if false, train model; otherwise try loading model from checkpoint and evaluate
-EVAL = False
+EVAL = True
 
 
 # reconstruct the captions and vocab, just as in extract_features.py
@@ -60,7 +62,7 @@ if not EVAL:
         dataset_train,
         batch_size=64, # change as needed
         shuffle=True,
-        num_workers=2, # may need to set to 0
+        num_workers=0, # may need to set to 0
         collate_fn=caption_collate_fn, # explicitly overwrite the collate_fn
     )
 
@@ -85,11 +87,24 @@ if not EVAL:
 
     # for each batch, prepare the targets using this torch.nn.utils.rnn function
     # targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
-
-
-
-
-
+    lengths = len(vocab)
+    max_epoch = 5
+    print_freq = 50
+    for epoch in range(max_epoch):
+        losses = []
+        for batch_idx, (image_features, captions, lengths) in enumerate(train_loader):
+            image_features = image_features.to(device)
+            captions = captions.to(device)
+            optimizer.zero_grad()
+            output = decoder(image_features, captions, lengths)
+            targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
+            loss = criterion(output, targets)
+            loss.backward()
+            optimizer.step()
+            losses.append(loss.detach().cpu().item())
+            if batch_idx % print_freq == 0:
+                print(f"\tEpoch {epoch + 1} / {max_epoch}: Batch {batch_idx} Loss {losses[-1]}")
+        print(f"Epoch {epoch + 1}: Mean Loss {sum(losses) / len(losses)}")
 
 
     # save model after training
@@ -128,8 +143,27 @@ else:
 
 
     # TODO define decode_caption() function in utils.py
-    # predicted_caption = decode_caption(word_ids, vocab)
+    image_id_candidate_reference = {} # type: dict[str, dict[str, list[str]]]
+    for image_id, ref_caption in zip(test_image_ids, test_cleaned_captions):
+        if image_id not in image_id_candidate_reference:
+            image_id_candidate_reference[image_id] = {"predicted": None, "ref": []}
+        image_id_candidate_reference[image_id]['ref'].append(ref_caption)
+    output = []
+    with torch.no_grad():
+        for image_id in tqdm(list(image_id_candidate_reference.keys())):
+            path = IMAGE_DIR + str(image_id) + ".jpg"
+            image = Image.open(open(path, 'rb'))
+            image = data_transform(image).to(device)
 
+            image_features = encoder(image.unsqueeze(0)) # add batch_size dim
+            word_ids = decoder.sample(image_features.view(1, -1))
+            predicted_caption = decode_caption(word_ids.squeeze().tolist(), vocab)
+            image_id_candidate_reference[image_id]['predicted'] = predicted_caption
+            output.append("\t".join([image_id, predicted_caption]))
+    torch.save(image_id_candidate_reference, "image_id_candidate_reference.pt")
+    print("\n".join(output))
+    with open("caption_generated.txt", "w+") as f:
+        f.write("\n".join(output))
 
 
 #########################################################################

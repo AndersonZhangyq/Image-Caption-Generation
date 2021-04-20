@@ -21,14 +21,10 @@ from config import *
 
 from tqdm import tqdm
 
-from multiprocessing import freeze_support
-
-freeze_support()
-
 
 lines = read_lines(TOKEN_FILE_TRAIN)
 # see what is in lines
-# print(lines[:2])
+print(lines[:2])
 
 #########################################################################
 #
@@ -89,7 +85,7 @@ with torch.no_grad():
     for data in tqdm(train_loader):
         data = data.to(device)
         features.append(model(data))
-    features = torch.cat(features)
+    features = torch.cat(features).squeeze()
 
 
 # to check your results, features should be dimensions [len(train_set), 2048]

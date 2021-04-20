@@ -9,6 +9,10 @@ from vocabulary import Vocabulary
 from config import *
 
 import string
+from collections import OrderedDict
+import operator
+
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def read_lines(filepath):
@@ -107,7 +111,18 @@ def decode_caption(sampled_ids, vocab):
 
 
     # QUESTION 2.1
-
+    words = []
+    pad_token_id = vocab.word2idx['<pad>']
+    start_token_id = vocab.word2idx['<start>']
+    end_token_id = vocab.word2idx['<end>']
+    unk_token_id = vocab.word2idx['<unk>']
+    for word_id in sampled_ids:
+        if word_id == start_token_id and len(words) == 0:
+            continue
+        if word_id == end_token_id:
+            break
+        words.append(vocab.idx2word[word_id])
+    predicted_caption = " ".join(words)
 
     return predicted_caption
 
@@ -148,3 +163,40 @@ def caption_collate_fn(data):
     return images, targets, lengths
 
 
+def calculate_bleu(image_id_candidate_reference):
+    image_id_bleu = OrderedDict()
+    for image_id, v in image_id_candidate_reference.items():
+        predict = v['predicted']  # type: str
+        ref_captions = v['ref']   # type: list[str]
+        predict_splited = predict.split()
+        ref_captions_splited = [t.split() for t in ref_captions]
+        bleu = sentence_bleu(ref_captions_splited, predict_splited)
+        image_id_bleu[image_id] = bleu
+        print(f"{image_id}: {bleu}")
+    sorted_tuples = sorted(image_id_bleu.items(), key=operator.itemgetter(1), reverse=True)
+    image_id_bleu = OrderedDict(sorted_tuples)
+    print("Average blue: {}".format(sum(image_id_bleu.values()) / len(image_id_bleu)))
+    torch.save(image_id_bleu, "image_id_bleu.pt")
+    length = len(image_id_bleu)
+    image_ids = list(image_id_bleu.keys())
+    # high bleu score sample
+    seleted_id = image_ids[length // 8]
+    print("bleu: {}, {}".format(image_id_bleu[seleted_id], image_id_candidate_reference[seleted_id]))
+    # low bleu score sample
+    seleted_id = image_ids[length // 8 * 7]
+    print("bleu: {}, {}".format(image_id_bleu[seleted_id], image_id_candidate_reference[seleted_id]))
+
+
+def calculate_cosine_similarity(image_id_candidate_reference):
+    image_id_cos_sim = OrderedDict()
+    for image_id, v in image_id_candidate_reference.items():
+        predict = v['predicted']  # type: str
+        ref_captions = v['ref']   # type: list[str]
+        predict_splited = predict.split()
+        predict_embed_vector = 
+        ref_captions_splited = [t.split() for t in ref_captions]
+
+
+if __name__ == "__main__":
+    image_id_candidate_reference = torch.load('image_id_candidate_reference.pt')
+    calculate_bleu(image_id_candidate_reference)

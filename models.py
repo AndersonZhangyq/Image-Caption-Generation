@@ -46,7 +46,7 @@ class DecoderRNN(nn.Module):
 
         # QUESTION 1.3 DecoderRNN - define this layer 
         # TODO
-        # self.rnn = 
+        self.rnn = nn.RNN(embed_size, hidden_size, num_layers)
 
 
 

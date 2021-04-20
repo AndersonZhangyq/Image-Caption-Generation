@@ -13,7 +13,7 @@ environment.
 
 
 # path to caption data
-CAPTION_DIR = "flickr8k-custom-captions/"
+CAPTION_DIR = "flickr8k-custom/captions/"
 # path to images
 IMAGE_DIR = "Flicker8k_Dataset/"
 
