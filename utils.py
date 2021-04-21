@@ -13,6 +13,7 @@ from collections import OrderedDict
 import operator
 
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 
 
 def read_lines(filepath):
@@ -165,14 +166,14 @@ def caption_collate_fn(data):
 
 def calculate_bleu(image_id_candidate_reference):
     image_id_bleu = OrderedDict()
-    for image_id, v in image_id_candidate_reference.items():
+    for image_id, v in tqdm(image_id_candidate_reference.items()):
         predict = v['predicted']  # type: str
         ref_captions = v['ref']   # type: list[str]
         predict_splited = predict.split()
         ref_captions_splited = [t.split() for t in ref_captions]
         bleu = sentence_bleu(ref_captions_splited, predict_splited)
         image_id_bleu[image_id] = bleu
-        print(f"{image_id}: {bleu}")
+        # print(f"{image_id}: {bleu}")
     sorted_tuples = sorted(image_id_bleu.items(), key=operator.itemgetter(1), reverse=True)
     image_id_bleu = OrderedDict(sorted_tuples)
     print("Average blue: {}".format(sum(image_id_bleu.values()) / len(image_id_bleu)))
@@ -187,14 +188,45 @@ def calculate_bleu(image_id_candidate_reference):
     print("bleu: {}, {}".format(image_id_bleu[seleted_id], image_id_candidate_reference[seleted_id]))
 
 
-def calculate_cosine_similarity(image_id_candidate_reference):
+def calculate_cosine_similarity(image_id_candidate_reference, embeddings, vocab):
     image_id_cos_sim = OrderedDict()
-    for image_id, v in image_id_candidate_reference.items():
-        predict = v['predicted']  # type: str
-        ref_captions = v['ref']   # type: list[str]
-        predict_splited = predict.split()
-        predict_embed_vector = 
-        ref_captions_splited = [t.split() for t in ref_captions]
+    word2idx = vocab.word2idx
+    with torch.no_grad():
+        for image_id, v in tqdm(image_id_candidate_reference.items()):
+            predict = v['predicted']  # type: str
+            ref_captions = v['ref']   # type: list[str]
+            predict_splited = predict.split()
+            predict_embed_vector = [embeddings(torch.tensor([word2idx[word]])) for word in predict_splited]
+            predict_embed_avg = torch.cat(predict_embed_vector).mean(0, keepdim=True)
+
+            ref_captions_splited = [t.split() for t in ref_captions]
+
+            scores = []
+            for caption in ref_captions_splited:
+                ref_embed_vector = []
+                for word in caption:
+                    if word in word2idx:
+                        ref_embed_vector.append(embeddings(torch.tensor([word2idx[word]])))
+                    else:
+                        # treat it as an unkown word
+                        ref_embed_vector.append(embeddings(torch.tensor([word2idx['<unk>']])))
+                        # print(f"{image_id}: {word} not in vacabualry")
+                ref_embed_avg = torch.cat(ref_embed_vector).mean(0, keepdim=True)
+                scores.append(cosine_similarity(ref_embed_avg, predict_embed_avg))
+            image_id_cos_sim[image_id] = (sum(scores) / len(scores)).item()
+            # print(f"{image_id}: {image_id_cos_sim[image_id]}")
+    sorted_tuples = sorted(image_id_cos_sim.items(), key=operator.itemgetter(1), reverse=True)
+    image_id_cos_sim = OrderedDict(sorted_tuples)
+    print("Average cosine similarity: {}".format(sum(image_id_cos_sim.values()) / len(image_id_cos_sim)))
+    torch.save(image_id_cos_sim, "image_id_cos_sim.pt")
+    length = len(image_id_cos_sim)
+    image_ids = list(image_id_cos_sim.keys())
+    # high bleu score sample
+    seleted_id = image_ids[length // 8]
+    print("cosine similarity: {}, {}".format(image_id_cos_sim[seleted_id], image_id_candidate_reference[seleted_id]))
+    # low bleu score sample
+    seleted_id = image_ids[length // 8 * 7]
+    print("cosine similarity: {}, {}".format(image_id_cos_sim[seleted_id], image_id_candidate_reference[seleted_id]))
 
 
 if __name__ == "__main__":

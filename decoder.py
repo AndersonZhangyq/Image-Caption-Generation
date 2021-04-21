@@ -144,26 +144,30 @@ else:
 
     # TODO define decode_caption() function in utils.py
     image_id_candidate_reference = {} # type: dict[str, dict[str, list[str]]]
-    for image_id, ref_caption in zip(test_image_ids, test_cleaned_captions):
-        if image_id not in image_id_candidate_reference:
-            image_id_candidate_reference[image_id] = {"predicted": None, "ref": []}
-        image_id_candidate_reference[image_id]['ref'].append(ref_caption)
-    output = []
-    with torch.no_grad():
-        for image_id in tqdm(list(image_id_candidate_reference.keys())):
-            path = IMAGE_DIR + str(image_id) + ".jpg"
-            image = Image.open(open(path, 'rb'))
-            image = data_transform(image).to(device)
+    import os
+    if os.path.exists("image_id_candidate_reference.pt"):
+        image_id_candidate_reference = torch.load("image_id_candidate_reference.pt")
+    else:
+        for image_id, ref_caption in zip(test_image_ids, test_cleaned_captions):
+            if image_id not in image_id_candidate_reference:
+                image_id_candidate_reference[image_id] = {"predicted": None, "ref": []}
+            image_id_candidate_reference[image_id]['ref'].append(ref_caption)
+        output = []
+        with torch.no_grad():
+            for image_id in tqdm(list(image_id_candidate_reference.keys())):
+                path = IMAGE_DIR + str(image_id) + ".jpg"
+                image = Image.open(open(path, 'rb'))
+                image = data_transform(image).to(device)
 
-            image_features = encoder(image.unsqueeze(0)) # add batch_size dim
-            word_ids = decoder.sample(image_features.view(1, -1))
-            predicted_caption = decode_caption(word_ids.squeeze().tolist(), vocab)
-            image_id_candidate_reference[image_id]['predicted'] = predicted_caption
-            output.append("\t".join([image_id, predicted_caption]))
-    torch.save(image_id_candidate_reference, "image_id_candidate_reference.pt")
-    print("\n".join(output))
-    with open("caption_generated.txt", "w+") as f:
-        f.write("\n".join(output))
+                image_features = encoder(image.unsqueeze(0)) # add batch_size dim
+                word_ids = decoder.sample(image_features.view(1, -1))
+                predicted_caption = decode_caption(word_ids.squeeze().tolist(), vocab)
+                image_id_candidate_reference[image_id]['predicted'] = predicted_caption
+                output.append("\t".join([image_id, predicted_caption]))
+        torch.save(image_id_candidate_reference, "image_id_candidate_reference.pt")
+        print("\n".join(output))
+        with open("caption_generated.txt", "w+") as f:
+            f.write("\n".join(output))
 
 
 #########################################################################
@@ -179,4 +183,4 @@ else:
     calculate_bleu(image_id_candidate_reference)
 
     # TODO
-    calculate_cosine_similarity(image_id_candidate_reference)
+    calculate_cosine_similarity(image_id_candidate_reference, decoder.embed.to('cpu'), vocab)
